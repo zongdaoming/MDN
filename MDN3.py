@@ -14,8 +14,8 @@ def get_mixture_coef_keras(output,numComponents=24,outputDim=1):
     out_pi = output[:,:numComponents]
     out_sigma = output[:,numComponents:2*numComponents]
     out_mu = output[:,2*numComponents:]
-    out_mu = K.reshape(out_mu,[-1,numComponents,outputDim])
-    out_mu = K.permute_dimensions(out_mu,[1,0,2])
+    # out_mu = K.reshape(out_mu,[-1,numComponents,outputDim])
+    # out_mu = K.permute_dimensions(out_mu,[1,0,2])
 
     # use softmax to normalize pi into prob distribution
     max_pi = K.max(out_pi,axis=1,keepdims=True)
@@ -38,12 +38,12 @@ def get_mixture_coef_tf(output,KMIX=24):
     out_mu = tf.placeholder(dtype=tf.float32,shape=[None,KMIX],name="mixparam")
 
     out_pi,out_sigma,out_mu = tf.split(output,3,1)  # split tensor[None,KMIX(72)] into [NONE,24] [NONE,24] [NONE,24]
-    max_pi = tf.reduce_max(out_pi,1,keep_dims=True)
+    max_pi = tf.reduce_max(out_pi,1,keepdims=True)
     out_pi = tf.subtract(out_pi,max_pi)
 
     out_pi = tf.exp(out_pi)
 
-    normalize_pi = tf.reciprocal(tf.reduce_sum(out_pi,1,keep_dims=True))
+    normalize_pi = tf.reciprocal(tf.reduce_sum(out_pi,1,keepdims=True)) #倒数
     out_pi = tf.multiply(normalize_pi,out_pi)
     out_sigma = tf.exp(out_sigma)
 
@@ -74,7 +74,7 @@ def get_mixture_coef(output, KMIX=24, OUTPUTDIM=1):
 def tf_normal_keras(y,mu,sigma):
     oneDivSqrtTwoPI = 1/math.sqrt(2*math.pi)
     result = y-mu
-    result = K.permute_dimensions(result,[2,1,0])
+    # result = K.permute_dimensions(result,[2,1,0])
     result = result*(1/sigma +1e-8)
     result =  -K.square(result)/2
     result = K.exp(result)*(1/(sigma+1e-8))*oneDivSqrtTwoPI
@@ -143,16 +143,13 @@ def get_pi_idx(x,pdf):
     accumulate = 0
     for i in range(N):
         accumulate += pdf[i]
-        if(accumulate >= x):
+        if accumulate >= x:
             return i
-        else:
-            print("Error with sampling ensemble")
-            return -1
+    else:
+        print("Error with sampling ensemble")
+        return -1
 
-def generate_ensemble_tf(out_pi,out_mu,out_sigma,M = 10):
-    x_test = np.float32(np.arange(-15.0, 15.0, 0.1))
-    x_test = x_test.reshape(x_test.size, 1)
-
+def generate_ensemble_tf(out_pi,out_mu,out_sigma,x_test,M = 10):
     NTEST = x_test.size # 300
     result = np.random.rand(NTEST,M) # initial random [0,1]
     rn = np.random.randn(NTEST,M)    # initial random [-1,1]
@@ -251,49 +248,52 @@ class MixtureDensity(Layer):
         return (inputShape[0], self.outputDim)
 
 
-def oned2oned():
-    NSAMPLE = 250
+NSAMPLE = 250
 
-    y_data = np.float32(np.random.uniform(-10.5,10.5,(1,NSAMPLE))).T
-    r_data = np.float32(np.random.normal(size = (NSAMPLE,1)))
-    x_data = np.float32(np.sin(0.75*y_data)*7.0+y_data*0.5+r_data*1.0)
+y_data = np.float32(np.random.uniform(-10.5, 10.5, (1, NSAMPLE))).T
+r_data = np.float32(np.random.normal(size=(NSAMPLE, 1)))
+x_data = np.float32(np.sin(0.75 * y_data) * 7.0 + y_data * 0.5 + r_data * 1.0)
 
-    x,y,output = mdn()
-    out_pi,out_sigma,out_mu = get_mixture_coef_keras(output)
-    lossfunc,k,bl = get_lossfunc(out_pi,out_sigma,out_mu,y)
-    train_op = tf.train.AdamOptimizer().minimize(lossfunc)
+x, y, output = mdn()
+out_pi, out_sigma, out_mu = get_mixture_coef_keras(output)
+lossfunc, k, bl = get_lossfunc(out_pi, out_sigma, out_mu, y)
+train_op = tf.train.AdamOptimizer().minimize(lossfunc)
 
-    sess = tf.InteractiveSession()
-    init = tf.global_variables_initializer()
-    sess.run(init)
+sess = tf.InteractiveSession()
+init = tf.global_variables_initializer()
+sess.run(init)
 
-    plt.figure(figsize=(8,8))
-    plt.plot(x_data,y_data,'ro',alpha=0.3)
-    plt.show()
+plt.figure(figsize=(8, 8))
+plt.plot(x_data, y_data, 'ro', alpha=0.3)
+plt.show()
 
-    NEPOCH = 10000
-    loss = np.zeros(NEPOCH)
-    for i in range(NEPOCH):
-        sess.run(train_op,feed_dict={x:x_data,y:y_data})
-        loss[i] = sess.run(lossfunc,feed_dict={x:x_data,y:y_data})
-        print(loss[i])
-    plt.figure(figsize=(8,8))
-    plt.plot(np.arange(100,NEPOCH,1),loss[100:],'r-')
-    plt.show()
+NEPOCH = 10000
+loss = np.zeros(NEPOCH)
+for i in range(NEPOCH):
+    sess.run(train_op, feed_dict={x: x_data, y: y_data})
+    loss[i] = sess.run(lossfunc, feed_dict={x: x_data, y: y_data})
+    # print(loss[i])
+plt.figure(figsize=(8, 8))
+plt.plot(np.arange(100, NEPOCH, 1), loss[100:], 'r-')
+plt.show()
 
-    x_test = np.float32(np.arange(-15,15,0.1))
-    NTEST = x_test.size
-    x_test = x_test.reshape(NTEST,1)  # need to be a matrix, not a vector
+x_test = np.float32(np.arange(-15, 15, 0.1))
+NTEST = x_test.size
+x_test = x_test.reshape(NTEST, 1)  # need to be a matrix, not a vector
 
-    out_pi_test, out_sigma_test, out_mu_test = sess.run(get_mixture_coef_keras(output),feed_dict={x:x_test})
+out_pi_test, out_sigma_test, out_mu_test = sess.run(get_mixture_coef_tf(output), feed_dict={x: x_test})
+# print(out_pi_test.shape, out_sigma_test.shape, out_mu_test.shape)
+# print(np.sum(out_pi_test,axis=1))
 
-    y_test = generate_ensemble_keras(out_pi_test,out_sigma_test,out_mu_test,x_test,M=1)
 
-    plt.figure(figsize=(8,8))
-    plt.plot(x_data,y_data,'ro',x_test,y_test[:,:,0],'bo',alpha = 0.3)
-    plt.show()
+y_test = generate_ensemble_tf(out_pi_test,out_mu_test,out_sigma_test,x_test,M=10)
+print(y_test.shape)
+plt.figure(figsize=(8,8))
+plt.plot(x_data,y_data,'ro',x_test,y_test[:,9],'bo',alpha = 0.3)
+plt.show()
 
-    # 1d to 2d test case
+# 1d to 2d test case
+
 def oned2twod():
     NSAMPLE = 250
     fig = plt.figure()
@@ -350,5 +350,4 @@ def oned2twod():
     plt.show()
 
 
-oned2oned()
-# oned2twod()
+
