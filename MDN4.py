@@ -65,9 +65,6 @@ class MixtureDensityNetWork():
         return tf.reduce_sum(result)
 
 
-
-
-
 def sample_from_mixture(x,pred_weights,pred_means,pred_std,amount):
     """
     Draws samples from mixture model.
