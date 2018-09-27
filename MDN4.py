@@ -1,15 +1,28 @@
-import numpy as np
-from scipy.stats import *
 from scipy.stats import norm as normal
 import seaborn as sns
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import keras.backend as K
 from keras.layers import Dense
-
 from sklearn.model_selection import train_test_split
+import numpy as np
+import edward
+np.random.seed(20)
 
-np.random.seed(1)
+
+def build_toy_dataset_(N):
+    y_data = np.random.uniform(-10.5,10.5,N)
+    r_data = np.random.normal(size=N) # random noise
+    x_data = np.sin((0.75*y_data)*7.0+y_data*0.5+r_data*1.0)
+    x_data = x_data.reshape(N,1)
+
+N = 5000
+D = 1
+
+"""
+We define TensorFlow placeholders, which will be used to manually feed batches of data during inference. 
+                  This is one of many ways to train models with data in Edward
+"""
 
 def build_toy_dataset(nsample=40000):
     y_data = np.float32(np.random.uniform(-10.5, 10.5, (1, nsample))).T
@@ -23,44 +36,64 @@ print("Size of output in training data: {}".format(y_train.shape))
 print("Size of features in test data: {}".format(X_test.shape))
 print("Size of output in test data: {}".format(y_test.shape))
 
+def plot_scatter(data_x,data_y):
+    from  matplotlib  import rc
+    rc('font', **{'family': 'sans-serif', 'sans-serif': ['Times New Roman'], 'size': 14})
+    params = {'text.usetex': False, 'mathtext.fontset': 'stixsans'}
+    plt.rcParams.update(params)
+
+    fig, ax = plt.subplots(num=1, figsize=(4.5, 3))
+    plt.subplots_adjust(right=0.99, left=0.125, bottom=0.15, top=0.975)
+
+    # ax.spines['right'].set_visible(False)
+    # ax.spines['top'].set_visible(False)
+
+    # ax.grid(True, linestyle = "--", color = "k", linewidth = "0.6")
+    ax.xaxis.grid(True, which='major', lw=0.5, linestyle='--', color='0.3', zorder=1)
+    ax.yaxis.grid(True, which='major', lw=0.5, linestyle='--', color='0.3', zorder=1)
+
+    plt.scatter(data_x,data_y,s=None,c=None,marker=None,cmap=None,alpha=None,linewidths=None,edgecolors=None)
+    plt.show()
+
+
+
+plot_scatter(X_train,y_train)
+
+
 # sns.regplot(X_train, y_train, fit_reg=False)
+# fig = plt.figure(figsize=(6,6))
+#
+# plt.plot(X_train,y_train,color="deepskyblue")
 
-class MixtureDensityNetWork():
+class MixtureDensityNetwork:
     """
-       Mixture density network for outputs y on inputs x.
-       p((x,y), (z,theta))
-       = sum_{k=1}^K pi_k(x; theta) Normal(y; mu_k(x; theta), sigma_k(x; theta))
-       where pi, mu, sigma are the output of a neural network taking x
-       as input and with parameters theta. There are no latent variables
-       z, which are hidden variables we aim to be Bayesian about.
-       """
-    def __init__(self,K):
-        self.K = K # Here K is the amount of Mixtures
-    def mapping(self,X):
-        """
-        :param X: pi,mu,sigma=NN(x;theta)
-        :return:
-        """
-        hidden1 = Dense(15,activation='relu')(X)
-        hidden2 = Dense(15,activation='relu')(hidden1)
-        self.mus = Dense(self.K,activation='relu')(hidden2)
-        self.sigmas = Dense(self.K,activation=K.exp)(hidden2)
-        self.pi = Dense(self.K,activation=K.softmax)(hidden2)
+    Mixture density network for outputs y on inputs x.
+    p((x,y), (z,theta))
+    = sum_{k=1}^K pi_k(x; theta) Normal(y; mu_k(x; theta), sigma_k(x; theta))
+    where pi, mu, sigma are the output of a neural network taking x
+    as input and with parameters theta. There are no latent variables
+    z, which are hidden variables we aim to be Bayesian about.
+    """
+    def __init__(self, K):
+        self.K = K # here K is the amount of Mixtures
 
-    def log_prob(self,xs,zs=None):
-        """
-        log p((xs,ys),(z,theta))=sum_{n=1}^{N} log p((xs[n:],ys[n]),theta)
-        :param xs:
-        :param zs:
-        :return:
-        """
-        # Note there are no parameters we're being Bayesian about.The
-        # parameters arr baked into how we specify the newural networks
-        X,y = xs
+    def mapping(self, X):
+        """pi, mu, sigma = NN(x; theta)"""
+        hidden1 = Dense(15, activation='relu')(X)  # fully-connected layer with 15 hidden units
+        hidden2 = Dense(15, activation='relu')(hidden1)
+        self.mus = Dense(self.K)(hidden2) # the means
+        self.sigmas = Dense(self.K, activation=K.exp)(hidden2) # the variance
+        self.pi = Dense(self.K, activation=K.softmax)(hidden2) # the mixture components
+
+    def log_prob(self, xs, zs=None):
+        """log p((xs,ys), (z,theta)) = sum_{n=1}^N log p((xs[n,:],ys[n]), theta)"""
+        # Note there are no parameters we're being Bayesian about. The
+        # parameters are baked into how we specify the neural networks.
+        X, y = xs
         self.mapping(X)
-        result = tf.exp(norm.logpdf(y,self.mus,self.sigma))
-        result = tf.multiply(result,self.pi)
-        result = tf.reduce_sum(result,1)
+        result = tf.exp(norm.logpdf(y, self.mus, self.sigmas))
+        result = tf.mul(result, self.pi)
+        result = tf.reduce_sum(result, 1)
         result = tf.log(result)
         return tf.reduce_sum(result)
 
@@ -86,3 +119,74 @@ def sample_from_mixture(x,pred_weights,pred_means,pred_std,amount):
         if j == amount-1:
             break
     return samples
+
+def plot_normal_mix(pis, mus, sigmas, ax, label='', comp=True):
+    """
+    Plots the mixture of Normal models to axis=ax
+    comp=True plots all components of mixtur model
+    """
+    x = np.linspace(-10.5, 10.5, 250)
+    final = np.zeros_like(x)
+    for i, (weight_mix, mu_mix, sigma_mix) in enumerate(zip(pis, mus, sigmas)):
+        temp = normal.pdf(x, mu_mix, sigma_mix) * weight_mix
+        final = final + temp
+        if comp:
+            ax.plot(x, temp, label='Normal ' + str(i))
+    ax.plot(x, final, label='Mixture of Normals ' + label)
+    ax.legend(fontsize=13)
+
+
+ed.set_seed(42)
+model =MixtureDensityNetwork(20)
+X = tf.placeholder(tf.float32, shape=(None, 1))
+y = tf.placeholder(tf.float32, shape=(None, 1))
+data = ed.Data([X, y]) # Make Edward Data model
+
+inference = ed.MAP(model, data) # Make the inference model
+sess = tf.Session() # start TF session
+K.set_session(sess) # pass session info to Keras
+inference.initialize(sess=sess) # initialize all TF variables using the Edward interface
+
+pred_weights, pred_means, pred_std = sess.run([model.pi, model.mus, model.sigmas],
+                                              feed_dict={X: X_test})
+
+NEPOCH = 1000
+train_loss = np.zeros(NEPOCH)
+test_loss = np.zeros(NEPOCH)
+for i in range(NEPOCH):
+    _, train_loss[i] = sess.run([inference.train, inference.loss],
+                                feed_dict={X: X_train, y: y_train})
+    test_loss[i] = sess.run(inference.loss, feed_dict={X: X_test, y: y_test})
+
+pred_weights, pred_means, pred_std = sess.run([model.pi, model.mus, model.sigmas],
+                                              feed_dict={X: X_test})
+
+fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(16, 3.5))
+plt.plot(np.arange(NEPOCH), test_loss/len(X_test), label='Test')
+plt.plot(np.arange(NEPOCH), train_loss/len(X_train), label='Train')
+plt.legend(fontsize=20)
+plt.xlabel('Epoch', fontsize=15)
+plt.ylabel('Log-likelihood', fontsize=15)
+
+obj = [0, 4, 6]
+fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(16, 6))
+
+plot_normal_mix(pred_weights[obj][0], pred_means[obj][0], pred_std[obj][0],
+                axes[0], comp=False)
+axes[0].axvline(x=y_test[obj][0], color='black', alpha=0.5)
+
+plot_normal_mix(pred_weights[obj][2], pred_means[obj][2], pred_std[obj][2],
+                axes[1], comp=False)
+axes[1].axvline(x=y_test[obj][2], color='black', alpha=0.5)
+
+plot_normal_mix(pred_weights[obj][1], pred_means[obj][1], pred_std[obj][1],
+                axes[2], comp=False)
+axes[2].axvline(x=y_test[obj][1], color='black', alpha=0.5)
+
+
+a = sample_from_mixture(X_test, pred_weights, pred_means,
+                        pred_std, amount=len(X_test))
+sns.jointplot(a[:,0], a[:,1], kind="hex", color="#4CB391",
+              ylim=(-10,10), xlim=(-14,14))
+
+
