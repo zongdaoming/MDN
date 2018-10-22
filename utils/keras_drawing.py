@@ -53,7 +53,7 @@ batch_size = 128
 nb_classes = 10
 nb_epoch = 20
 
-# the data, shuffled and split between train and test sets
+# the data, shuffled and split between train and Machine_Learning_Models sets
 (X_train, y_train), (X_test, y_test) = mnist.load_data()
 
 X_train = X_train.reshape(60000, 784)
@@ -63,7 +63,7 @@ X_test = X_test.astype('float32')
 X_train /= 255
 X_test /= 255
 print(X_train.shape[0], 'train samples')
-print(X_test.shape[0], 'test samples')
+print(X_test.shape[0], 'Machine_Learning_Models samples')
 
 # convert class vectors to binary class matrices
 Y_train = np_utils.to_categorical(y_train, nb_classes)

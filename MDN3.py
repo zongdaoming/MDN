@@ -292,7 +292,7 @@ plt.figure(figsize=(8,8))
 plt.plot(x_data,y_data,'ro',x_test,y_test[:,9],'bo',alpha = 0.3)
 plt.show()
 
-# 1d to 2d test case
+# 1d to 2d Machine_Learning_Models case
 
 def oned2twod():
     NSAMPLE = 250

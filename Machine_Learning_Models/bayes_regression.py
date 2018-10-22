@@ -40,10 +40,10 @@ y_post = ed.copy(y, {w: qw, b: qb})
 # y_post = Normal(loc=ed.dot(X, qw) + qb, scale=tf.ones(N))
 
 
-print("Mean squared error on test data:")
+print("Mean squared error on Machine_Learning_Models data:")
 print(ed.evaluate('mean_squared_error', data={X: X_test, y_post: y_test}))
 
-print("Mean absolute error on test data:")
+print("Mean absolute error on Machine_Learning_Models data:")
 print(ed.evaluate('mean_absolute_error', data={X: X_test, y_post: y_test}))
 
 def visualise(X_data, y_data, w, b, n_samples=10):

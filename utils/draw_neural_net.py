@@ -64,5 +64,5 @@ def fun_network():
 
 model = fun_network()
 
-plot_model(model,to_file='test.pdf',show_shapes=True,show_layer_names=True)
+plot_model(model,to_file='Machine_Learning_Models.pdf',show_shapes=True,show_layer_names=True)
 

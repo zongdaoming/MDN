@@ -30,8 +30,8 @@ D = 1  # number of features
 X_train, X_test, y_train, y_test = build_toy_dataset(N)
 print("Size of features in training data: {}".format(X_train.shape))
 print("Size of output in training data: {}".format(y_train.shape))
-print("Size of features in test data: {}".format(X_test.shape))
-print("Size of output in test data: {}".format(y_test.shape))
+print("Size of features in Machine_Learning_Models data: {}".format(X_test.shape))
+print("Size of output in Machine_Learning_Models data: {}".format(y_test.shape))
 
 def plot_scatter(data_x,data_y):
     from  matplotlib  import rc
@@ -194,8 +194,8 @@ def build_toy_dataset(nsample=40000):
 # X_train, X_test, y_train, y_test = build_toy_dataset()
 # print("Size of features in training data: {}".format(X_train.shape))
 # print("Size of output in training data: {}".format(y_train.shape))
-# print("Size of features in test data: {}".format(X_test.shape))
-# print("Size of output in test data: {}".format(y_test.shape))
+# print("Size of features in Machine_Learning_Models data: {}".format(X_test.shape))
+# print("Size of output in Machine_Learning_Models data: {}".format(y_test.shape))
 
 
 
